@@ -1,19 +1,35 @@
-﻿using Infrastructure.SqlConnectionManagerGroup;
+using Application.ServiceContract;
+using Application.ServiceImplement;
+using Infrastructure.SqlConnectionManagerGroup;
 
-namespace GhasemWebServiceRestFull.Dependency
+namespace GhasemWebServiceRestFull.Dependency;
+
+public static class DiRegister
 {
-    public static class DiRegister
+    public static IServiceCollection AddServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
-        public static IServiceCollection AddServices(this IServiceCollection services,IConfiguration configuration)
-        {
-            CSConfig taminConfig = new CSConfig(configuration.GetConnectionString("TaminConnectionString")??throw new ArgumentException("connection String Is Not Valid"));
-            CSConfig mrsConfig = new CSConfig(configuration.GetConnectionString("MrsConnectionString") ?? throw new ArgumentException("connection String Is Not Valid"));
-            services.AddKeyedSingleton("taminCs",taminConfig);
-            services.AddKeyedSingleton("mrsCs", mrsConfig);
-            services.AddKeyedScoped<SqlConnectionManager>("Tamin",(serviceprovider,p)=>new SqlConnectionManager(taminConfig));
-            services.AddKeyedScoped<SqlConnectionManager>("Mrs", (serviceprovider, p) => new SqlConnectionManager(mrsConfig));
+        var taminConnectionString =
+            configuration.GetConnectionString("TaminConnectionString")
+            ?? throw new ArgumentException("Tamin connection string is not configured.");
 
-            return services;
-        }
+        var mrsConnectionString =
+            configuration.GetConnectionString("MrsConnectionString")
+            ?? throw new ArgumentException("Mrs connection string is not configured.");
+
+        // The managers only hold immutable connection-string state and create
+        // a new pooled SqlConnection per operation, so singleton lifetime is safe.
+        services.AddKeyedSingleton(
+            "Tamin",
+            new SqlConnectionManager(new CSConfig(taminConnectionString)));
+
+        services.AddKeyedSingleton(
+            "Mrs",
+            new SqlConnectionManager(new CSConfig(mrsConnectionString)));
+
+        services.AddKeyedScoped<ITaminReports, TaminReports>("Mrs");
+
+        return services;
     }
 }
