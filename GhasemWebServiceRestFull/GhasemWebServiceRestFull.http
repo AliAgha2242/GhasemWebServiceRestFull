@@ -1,0 +1,5 @@
+@GhasemWebServiceRestFull_HostAddress = http://localhost:5249
+
+GET {{GhasemWebServiceRestFull_HostAddress}}/getTest/
+Accept: application/json
+###

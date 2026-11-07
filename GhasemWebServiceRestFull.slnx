@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Application/Application.csproj" />
+  <Project Path="GhasemWebServiceRestFull/GhasemWebServiceRestFull.csproj" />
+  <Project Path="Infrastructure/Infrastructure.csproj" />
+  <Project Path="Model/Model.csproj" />
+</Solution>
