@@ -1,66 +1,56 @@
-﻿using Application.ServiceContract;
+using Application.ServiceContract;
 using Dapper;
-using GhasemWebServiceRestFull.Dependency;
 using Infrastructure.SqlConnectionManagerGroup;
-using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Text;
-using System.Text.Json;
+using System.Runtime.CompilerServices;
 
-namespace Application.ServiceImplement
+namespace Application.ServiceImplement;
+
+public sealed class TaminReports : ITaminReports
 {
-    public class TaminReports : ServiceContract.ITaminReports
+    private readonly SqlConnectionManager _connectionManager;
+
+    public TaminReports(
+        [FromKeyedServices("Mrs")] SqlConnectionManager connectionManager)
     {
-        private readonly SqlConnectionManager connectionManager;
+        _connectionManager = connectionManager;
+    }
 
-        public TaminReports([FromKeyedServices("Mrs")] SqlConnectionManager connectionManager)
+    public async IAsyncEnumerable<dynamic> GetSalesAsync(
+        decimal taminSn,
+        string fromDate,
+        string toDate,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var sql = new Sql
         {
-            this.connectionManager = connectionManager;
-        }
-        //public async ValueTask<ApiResult<List<IDictionary<string,object>>>> GetSalesAsync(decimal TaminSn, string fromDate, string toDate)
-        //{
-        //    try
-        //    {
-        //        Sql sql = new Sql()
-        //        {
-        //            Text = "rpSpG_ForooshWebService",
-        //            commandType = System.Data.CommandType.StoredProcedure,
-        //            Parameters = new { @TaminKonandehSN0 = TaminSn, @AzTarikh0 = fromDate, @TaTarikh0 = toDate }
-        //        };
-                
-        //        //var result = (await connectionManager.QueryAsync(sql)).Cast<IDictionary<string, object>>().ToList();
-        //        var res =  connectionManager.Connection.Query<dynamic>(sql.Text,param:sql.Parameters,buffered:false).AsQueryable().Take(2000);
-        //        var a = res.Cast<IDictionary<string, object>>().ToList();
-        //        return ApiResult<List<IDictionary<string, object>>>.Success(a);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return ApiResult<List<IDictionary<string, object>>>.Failed(null, ex);
-        //    }
-        //}
+            Text = "rpSpG_ForooshWebService",
+            commandType = System.Data.CommandType.StoredProcedure,
+            Parameters = new
+            {
+                TaminKonandehSN0 = taminSn,
+                AzTarikh0 = fromDate,
+                TaTarikh0 = toDate
+            }
+        };
 
-        async ValueTask<IEnumerable<dynamic>> ITaminReports.GetSalesAsync(decimal TaminSn, string fromDate, string toDate)
+        await using var connection = _connectionManager.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        var command = new CommandDefinition(
+            commandText: sql.Text,
+            parameters: sql.Parameters,
+            transaction: sql.transaction,
+            commandType: sql.commandType,
+            cancellationToken: cancellationToken);
+
+        // Dapper reads rows asynchronously without buffering the complete result.
+        // The connection remains alive until enumeration completes or is cancelled.
+        await foreach (var row in connection
+            .QueryUnbufferedAsync<dynamic>(command)
+            .WithCancellation(cancellationToken)
+            .ConfigureAwait(false))
         {
-            try
-            {
-                Sql sql = new Sql()
-                {
-                    Text = "rpSpG_ForooshWebService",
-                    commandType = System.Data.CommandType.StoredProcedure,
-                    Parameters = new { @TaminKonandehSN0 = TaminSn, @AzTarikh0 = fromDate, @TaTarikh0 = toDate }
-                };
-
-                //var result = (await connectionManager.QueryAsync(sql)).Cast<IDictionary<string, object>>().ToList();
-                var res = await connectionManager.QueryAsync<dynamic>(sql,buffered: false);
-                var a = res.AsEnumerable();
-                return a;
-            }
-            catch (Exception ex)
-            {
-                throw;
-            }
+            yield return row;
         }
     }
 }
