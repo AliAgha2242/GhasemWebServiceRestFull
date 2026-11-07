@@ -1,5 +1,4 @@
-﻿using Application.ServiceContract;
-using Application.ServiceImplement;
+using Application.ServiceContract;
 using GhasemWebServiceRestFull.Dependency;
 using Infrastructure.SqlConnectionManagerGroup;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -8,9 +7,6 @@ using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-//builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
 builder.Services.AddServices(builder.Configuration);
 
@@ -23,87 +19,77 @@ builder.Services.AddResponseCompression(options =>
 
 builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
 {
-    options.Level = System.IO.Compression.CompressionLevel.Optimal;
+    options.Level = CompressionLevel.Fastest;
 });
 
-
+builder.Services.Configure<GzipCompressionProviderOptions>(options =>
+{
+    options.Level = CompressionLevel.Fastest;
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-//if (app.Environment.IsDevelopment())
-//{
-//    //app.MapOpenApi();
-//}
+// Compression must wrap the endpoint response so it can negotiate
+// Accept-Encoding and compress the JSON stream exactly once.
+app.UseResponseCompression();
+
 app.UseSwagger();
 app.UseSwaggerUI();
-//app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-app.MapGet("/",()=> Results.Redirect("/swagger")).ExcludeFromDescription();
+app.MapGet("/", () => Results.Redirect("/swagger"))
+    .ExcludeFromDescription();
+
 app.MapGet("/getTest", async (
-    [FromKeyedServices("Mrs")] SqlConnectionManager sqlConnection,string fromdate,string toDate) =>
-{
-    ITaminReports reports = new TaminReports(sqlConnection);
-
-    var res = await reports.GetSalesAsync(
-        453.935m, fromdate, toDate);
-
-    byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(res);
-
-    using var outputStream = new MemoryStream();
-
-    using (var gzip = new GZipStream(
-        outputStream,
-        CompressionLevel.SmallestSize,
-        leaveOpen: true))
-    {
-        await gzip.WriteAsync(bytes);
-    }
-
-    return Results.Bytes(
-        outputStream.ToArray(),
-        contentType: "application/json");
-});
-
-
-app.MapGet("/getTestStr", async (
-    [FromKeyedServices("Mrs")] SqlConnectionManager sqlConnection,
+    [FromKeyedServices("Mrs")] ITaminReports reports,
+    string fromdate,
+    string toDate,
     HttpContext context) =>
 {
-    ITaminReports reports = new TaminReports(sqlConnection);
-
-    var res = await reports.GetSalesAsync(
-        453.935m, "14050101", "14050631");
-
-    context.Response.StatusCode = 200;
-    context.Response.ContentType = "application/json";
-    context.Response.Headers.ContentEncoding = "br";
-
-    await using var brotli = new BrotliStream(
-        context.Response.Body,
-        CompressionLevel.Fastest,
-        leaveOpen: true);
-
-    await JsonSerializer.SerializeAsync(
-        brotli,
-        res,
-        cancellationToken: context.RequestAborted);
-
-    await brotli.FlushAsync();
+    await WriteSalesResponseAsync(
+        context,
+        reports,
+        fromdate,
+        toDate);
 
     return Results.Empty;
 });
 
+app.MapGet("/getTestStr", async (
+    [FromKeyedServices("Mrs")] ITaminReports reports,
+    HttpContext context) =>
+{
+    // Kept for compatibility with the existing test endpoint.
+    await WriteSalesResponseAsync(
+        context,
+        reports,
+        "14050101",
+        "14050631");
 
+    return Results.Empty;
+});
 
-app.UseResponseCompression();
 app.Run();
 
-internal record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
+static async Task WriteSalesResponseAsync(
+    HttpContext context,
+    ITaminReports reports,
+    string fromDate,
+    string toDate)
 {
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+    context.Response.StatusCode = StatusCodes.Status200OK;
+    context.Response.ContentType = "application/json; charset=utf-8";
+    context.Response.Headers.CacheControl = "no-store";
+
+    var rows = reports.GetSalesAsync(
+        453.935m,
+        fromDate,
+        toDate,
+        context.RequestAborted);
+
+    // System.Text.Json enumerates IAsyncEnumerable incrementally.
+    // The HTTP body is streamed, while the client still receives one valid JSON array.
+    await JsonSerializer.SerializeAsync(
+        context.Response.Body,
+        rows,
+        cancellationToken: context.RequestAborted);
 }
