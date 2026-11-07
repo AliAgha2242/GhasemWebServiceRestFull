@@ -1,6 +1,7 @@
 using Application.ServiceContract;
 using Dapper;
 using Infrastructure.SqlConnectionManagerGroup;
+using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.CompilerServices;
 
 namespace Application.ServiceImplement;
