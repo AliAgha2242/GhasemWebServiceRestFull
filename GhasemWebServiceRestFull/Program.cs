@@ -1,6 +1,5 @@
 using Application.ServiceContract;
 using GhasemWebServiceRestFull.Dependency;
-using Infrastructure.SqlConnectionManagerGroup;
 using Microsoft.AspNetCore.ResponseCompression;
 using System.IO.Compression;
 using System.Text.Json;
