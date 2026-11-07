@@ -1,12 +1,10 @@
-﻿using GhasemWebServiceRestFull.Dependency;
-using System;
-using System.Collections.Generic;
-using System.Text;
+namespace Application.ServiceContract;
 
-namespace Application.ServiceContract
+public interface ITaminReports
 {
-    public interface ITaminReports
-    {
-        ValueTask<IEnumerable<dynamic>> GetSalesAsync(decimal TaminSn, string fromDate, string toDate);
-    }
+    IAsyncEnumerable<dynamic> GetSalesAsync(
+        decimal taminSn,
+        string fromDate,
+        string toDate,
+        CancellationToken cancellationToken = default);
 }
