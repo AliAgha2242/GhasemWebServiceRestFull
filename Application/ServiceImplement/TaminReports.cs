@@ -37,17 +37,14 @@ public sealed class TaminReports : ITaminReports
         await using var connection = _connectionManager.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
-        var command = new CommandDefinition(
-            commandText: sql.Text,
-            parameters: sql.Parameters,
-            transaction: sql.transaction,
-            commandType: sql.commandType,
-            cancellationToken: cancellationToken);
-
         // Dapper reads rows asynchronously without buffering the complete result.
+        // WithCancellation passes the request token to Dapper's async iterator.
         // The connection remains alive until enumeration completes or is cancelled.
         await foreach (var row in connection
-            .QueryUnbufferedAsync<dynamic>(command)
+            .QueryUnbufferedAsync<dynamic>(
+                sql.Text,
+                sql.Parameters,
+                commandType: sql.commandType)
             .WithCancellation(cancellationToken)
             .ConfigureAwait(false))
         {
